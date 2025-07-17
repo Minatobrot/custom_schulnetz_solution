@@ -1,0 +1,334 @@
+[gd_scene load_steps=9 format=3 uid="uid://b4nxvr5s4a7rk"]
+
+[sub_resource type="GDScript" id="GDScript_1"]
+script/source = "extends Control
+
+# Swiss Grade System (6-point scale)
+func calculate_grade_points(grade: float) -> float:
+	var rounded_grade = round(grade * 2) / 2.0
+	
+	if rounded_grade >= 6.0: return 2.0
+	elif rounded_grade == 5.5: return 1.5
+	elif rounded_grade == 5.0: return 1.0
+	elif rounded_grade == 4.5: return 0.5
+	elif rounded_grade == 4.0: return 0.0
+	elif rounded_grade == 3.5: return -1.0
+	elif rounded_grade == 3.0: return -2.0
+	elif rounded_grade == 2.5: return -3.0
+	elif rounded_grade == 2.0: return -4.0
+	elif rounded_grade == 1.5: return -6.0
+	else: return -8.0
+
+# Sample grade data (similar to your extension)
+var grade_data = [
+	{\"subject\": \"BG-M1a-CrN\", \"full_name\": \"Bildnerisches Gestalten\", \"category\": \"kunst\", \"grades\": [5.5, 6.0, 4.5], \"weights\": [1.0, 2.0, 1.0]},
+	{\"subject\": \"MA-M1a-BuA\", \"full_name\": \"Mathematik\", \"category\": \"naturwissenschaften\", \"grades\": [4.0, 3.5, 5.0], \"weights\": [2.0, 1.0, 2.0]},
+	{\"subject\": \"DE-M1a-MaN\", \"full_name\": \"Deutsch\", \"category\": \"sprache\", \"grades\": [5.0, 4.5, 5.5], \"weights\": [1.5, 1.0, 2.0]},
+	{\"subject\": \"EN-M1a-JoH\", \"full_name\": \"Englisch\", \"category\": \"sprache\", \"grades\": [5.5, 6.0], \"weights\": [1.0, 2.0]},
+	{\"subject\": \"SP-M1a-WeS\", \"full_name\": \"Sport\", \"category\": \"sport\", \"grades\": [6.0, 5.5, 6.0], \"weights\": [1.0, 1.0, 1.0]}
+]
+
+func _ready():
+	setup_grade_display()
+	$Header/HeaderContent/BackButton.pressed.connect(_on_back_button_pressed)
+
+func calculate_weighted_average(grades: Array, weights: Array) -> float:
+	var total_weight = 0.0
+	var weighted_sum = 0.0
+	
+	for i in range(grades.size()):
+		weighted_sum += grades[i] * weights[i]
+		total_weight += weights[i]
+	
+	return weighted_sum / total_weight if total_weight > 0 else 0.0
+
+func setup_grade_display():
+	var subjects_container = $MainContainer/ScrollContainer/SubjectsContainer
+	
+	# Clear existing children
+	for child in subjects_container.get_children():
+		child.queue_free()
+	
+	# Add subjects
+	for subject_data in grade_data:
+		var subject_card = create_subject_card(subject_data)
+		subjects_container.add_child(subject_card)
+
+func create_subject_card(subject_data: Dictionary) -> Panel:
+	var card = Panel.new()
+	# Use theme from resource instead of loading from main scene
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.9, 0.95, 1, 1)
+	style.corner_radius_top_left = 12
+	style.corner_radius_top_right = 12
+	style.corner_radius_bottom_right = 12
+	style.corner_radius_bottom_left = 12
+	card.add_theme_stylebox_override(\"panel\", style)
+	card.custom_minimum_size = Vector2(0, 120)
+	
+	var vbox = VBoxContainer.new()
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vbox.offset_left = 15
+	vbox.offset_top = 10
+	vbox.offset_right = -15
+	vbox.offset_bottom = -10
+	
+	# Subject header
+	var header = HBoxContainer.new()
+	
+	var subject_label = Label.new()
+	subject_label.text = subject_data.full_name
+	subject_label.label_settings = LabelSettings.new()
+	subject_label.label_settings.font_size = 16
+	subject_label.label_settings.font_color = Color(1, 1, 1, 1)
+	header.add_child(subject_label)
+	
+	var spacer = Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(spacer)
+	
+	# Calculate average
+	var average = calculate_weighted_average(subject_data.grades, subject_data.weights)
+	var points = calculate_grade_points(average)
+	
+	var avg_label = Label.new()
+	avg_label.text = \"⌀ \" + str(round(average * 100) / 100.0)
+	avg_label.label_settings = LabelSettings.new()
+	avg_label.label_settings.font_size = 18
+	avg_label.label_settings.font_color = Color(1, 0.8, 0.4, 1) if average >= 4.0 else Color(1, 0.4, 0.4, 1)
+	header.add_child(avg_label)
+	
+	vbox.add_child(header)
+	
+	# Subject code
+	var code_label = Label.new()
+	code_label.text = subject_data.subject
+	code_label.label_settings = LabelSettings.new()
+	code_label.label_settings.font_size = 12
+	code_label.label_settings.font_color = Color(0.7, 0.8, 0.9, 1)
+	vbox.add_child(code_label)
+	
+	# Grades display
+	var grades_container = HBoxContainer.new()
+	for i in range(subject_data.grades.size()):
+		var grade = subject_data.grades[i]
+		var weight = subject_data.weights[i]
+		
+		var grade_badge = Panel.new()
+		var grade_style = StyleBoxFlat.new()
+		grade_style.bg_color = Color(0.15, 0.39, 0.61, 1) if grade >= 4.0 else Color(0.8, 0.3, 0.3, 1)
+		grade_style.corner_radius_top_left = 4
+		grade_style.corner_radius_top_right = 4
+		grade_style.corner_radius_bottom_right = 4
+		grade_style.corner_radius_bottom_left = 4
+		grade_badge.add_theme_stylebox_override(\"panel\", grade_style)
+		grade_badge.custom_minimum_size = Vector2(50, 25)
+		
+		var grade_label = Label.new()
+		grade_label.text = str(grade)
+		grade_label.label_settings = LabelSettings.new()
+		grade_label.label_settings.font_size = 12
+		grade_label.label_settings.font_color = Color(1, 1, 1, 1)
+		grade_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		grade_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		grade_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		
+		grade_badge.add_child(grade_label)
+		grades_container.add_child(grade_badge)
+		
+		if i < subject_data.grades.size() - 1:
+			var space = Control.new()
+			space.custom_minimum_size = Vector2(5, 0)
+			grades_container.add_child(space)
+	
+	vbox.add_child(grades_container)
+	
+	# Points display
+	var points_label = Label.new()
+	points_label.text = \"Points: \" + str(points) + \" (\" + get_grade_description(average) + \")\"
+	points_label.label_settings = LabelSettings.new()
+	points_label.label_settings.font_size = 11
+	points_label.label_settings.font_color = Color(0.6, 0.7, 0.8, 1)
+	vbox.add_child(points_label)
+	
+	card.add_child(vbox)
+	return card
+
+func get_grade_description(grade: float) -> String:
+	if grade >= 6.0: return \"Excellent\"
+	elif grade >= 5.5: return \"Very Good\"
+	elif grade >= 5.0: return \"Good\"
+	elif grade >= 4.5: return \"Satisfactory+\"
+	elif grade >= 4.0: return \"Sufficient\"
+	elif grade >= 3.5: return \"Insufficient\"
+	elif grade >= 3.0: return \"Poor\"
+	elif grade >= 2.5: return \"Very Poor\"
+	elif grade >= 2.0: return \"Bad\"
+	elif grade >= 1.5: return \"Very Bad\"
+	else: return \"Terrible\"
+
+func _on_back_button_pressed():
+	get_tree().change_scene_to_file(\"res://scenes/ui/main_menu.tscn\")
+"
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
+bg_color = Color(0.11, 0.15, 0.25, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2"]
+bg_color = Color(0.2, 0.25, 0.35, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_4"]
+bg_color = Color(0.15, 0.39, 0.61, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="LabelSettings" id="LabelSettings_1"]
+font_size = 24
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3"]
+bg_color = Color(0.9, 0.95, 1, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="LabelSettings" id="LabelSettings_2"]
+font_size = 18
+font_color = Color(0.2, 0.3, 0.4, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_3"]
+font_size = 14
+font_color = Color(0.4, 0.5, 0.6, 1)
+
+[node name="GradesScene" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = SubResource("GDScript_1")
+
+[node name="Background" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_1")
+
+[node name="Header" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 80.0
+grow_horizontal = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_2")
+
+[node name="HeaderContent" type="HBoxContainer" parent="Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 10.0
+offset_right = -20.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="BackButton" type="Button" parent="Header/HeaderContent"]
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_4")
+text = "← BACK"
+
+[node name="Title" type="Label" parent="Header/HeaderContent"]
+layout_mode = 2
+text = "📊 GRADES (NOTEN)"
+label_settings = SubResource("LabelSettings_1")
+
+[node name="Spacer" type="Control" parent="Header/HeaderContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MainContainer" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 30.0
+offset_top = 100.0
+offset_right = -30.0
+offset_bottom = -30.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="StatsPanel" type="Panel" parent="MainContainer"]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_3")
+
+[node name="StatsContent" type="HBoxContainer" parent="MainContainer/StatsPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 15.0
+offset_right = -20.0
+offset_bottom = -15.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="OverallStats" type="VBoxContainer" parent="MainContainer/StatsPanel/StatsContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="OverallTitle" type="Label" parent="MainContainer/StatsPanel/StatsContent/OverallStats"]
+layout_mode = 2
+text = "📈 Overall Performance"
+label_settings = SubResource("LabelSettings_2")
+
+[node name="OverallAverage" type="Label" parent="MainContainer/StatsPanel/StatsContent/OverallStats"]
+layout_mode = 2
+text = "Average: 4.8 / 6.0"
+label_settings = SubResource("LabelSettings_3")
+
+[node name="TotalPoints" type="Label" parent="MainContainer/StatsPanel/StatsContent/OverallStats"]
+layout_mode = 2
+text = "Total Points: +12.5"
+label_settings = SubResource("LabelSettings_3")
+
+[node name="RPGStats" type="VBoxContainer" parent="MainContainer/StatsPanel/StatsContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RPGTitle" type="Label" parent="MainContainer/StatsPanel/StatsContent/RPGStats"]
+layout_mode = 2
+text = "⚔️ RPG Status"
+label_settings = SubResource("LabelSettings_2")
+
+[node name="HPInfo" type="Label" parent="MainContainer/StatsPanel/StatsContent/RPGStats"]
+layout_mode = 2
+text = "HP: 75/100 (Good grades heal!)"
+label_settings = SubResource("LabelSettings_3")
+
+[node name="XPInfo" type="Label" parent="MainContainer/StatsPanel/StatsContent/RPGStats"]
+layout_mode = 2
+text = "XP: 1250/2000 (Level 3)"
+label_settings = SubResource("LabelSettings_3")
+
+[node name="Spacer" type="Control" parent="MainContainer"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MainContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="SubjectsContainer" type="VBoxContainer" parent="MainContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3

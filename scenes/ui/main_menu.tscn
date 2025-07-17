@@ -1,0 +1,381 @@
+[gd_scene load_steps=14 format=3 uid="uid://cqch65xerj2t7"]
+
+[sub_resource type="GDScript" id="GDScript_1"]
+script/source = "extends Control
+
+func _ready():
+	# Connect buttons to their respective functions
+	$MainContainer/NavigationPanel/NavigationContainer/GameButton.pressed.connect(_on_game_button_pressed)
+	$MainContainer/NavigationPanel/NavigationContainer/GradesButton.pressed.connect(_on_grades_button_pressed)
+	$MainContainer/NavigationPanel/NavigationContainer/CalendarButton.pressed.connect(_on_calendar_button_pressed)
+	$MainContainer/NavigationPanel/NavigationContainer/AchievementsButton.pressed.connect(_on_achievements_button_pressed)
+	$MainContainer/NavigationPanel/NavigationContainer/CharacterButton.pressed.connect(_on_character_button_pressed)
+	$MainContainer/NavigationPanel/NavigationContainer/SettingsButton.pressed.connect(_on_settings_button_pressed)
+
+func _on_game_button_pressed():
+	print(\"Switching to Game Scene\")
+	get_tree().change_scene_to_file(\"res://scenes/game/game_scene.tscn\")
+
+func _on_grades_button_pressed():
+	print(\"Switching to Grades Scene\")
+	get_tree().change_scene_to_file(\"res://scenes/ui/grades_scene.tscn\")
+
+func _on_calendar_button_pressed():
+	print(\"Switching to Calendar Scene\")
+	get_tree().change_scene_to_file(\"res://scenes/ui/calendar_scene.tscn\")
+
+func _on_achievements_button_pressed():
+	print(\"Switching to Achievements Scene\")
+	get_tree().change_scene_to_file(\"res://scenes/ui/achievements_scene.tscn\")
+
+func _on_character_button_pressed():
+	print(\"Switching to Character Scene\")
+	get_tree().change_scene_to_file(\"res://scenes/ui/character_scene.tscn\")
+
+func _on_settings_button_pressed():
+	print(\"Switching to Settings Scene\")
+	get_tree().change_scene_to_file(\"res://scenes/ui/settings_scene.tscn\")
+"
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
+bg_color = Color(0.11, 0.15, 0.25, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_6"]
+bg_color = Color(0.2, 0.25, 0.35, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_1"]
+font_size = 24
+
+[sub_resource type="LabelSettings" id="LabelSettings_2"]
+font_size = 14
+font_color = Color(0.9, 0.9, 0.9, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_3"]
+font_size = 12
+font_color = Color(0.7, 0.8, 0.9, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_4"]
+bg_color = Color(0.18, 0.45, 0.7, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3"]
+bg_color = Color(0.13, 0.33, 0.52, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2"]
+bg_color = Color(0.15, 0.39, 0.61, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_5"]
+bg_color = Color(0.9, 0.95, 1, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="LabelSettings" id="LabelSettings_4"]
+font_size = 32
+font_color = Color(0.2, 0.3, 0.4, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_5"]
+font_size = 14
+
+[sub_resource type="LabelSettings" id="LabelSettings_6"]
+font_size = 24
+
+[node name="MainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = SubResource("GDScript_1")
+
+[node name="Background" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_1")
+
+[node name="Header" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 80.0
+grow_horizontal = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_6")
+
+[node name="HeaderContent" type="HBoxContainer" parent="Header"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 10.0
+offset_right = -20.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Logo" type="Label" parent="Header/HeaderContent"]
+layout_mode = 2
+text = "🎮 SCHULNETZ RPG"
+label_settings = SubResource("LabelSettings_1")
+
+[node name="Spacer" type="Control" parent="Header/HeaderContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="UserInfo" type="HBoxContainer" parent="Header/HeaderContent"]
+layout_mode = 2
+
+[node name="HPBar" type="ProgressBar" parent="Header/HeaderContent/UserInfo"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+value = 75.0
+show_percentage = false
+
+[node name="HPLabel" type="Label" parent="Header/HeaderContent/UserInfo"]
+layout_mode = 2
+text = "HP: 75/100"
+label_settings = SubResource("LabelSettings_2")
+
+[node name="LevelLabel" type="Label" parent="Header/HeaderContent/UserInfo"]
+layout_mode = 2
+text = "Level 3"
+label_settings = SubResource("LabelSettings_2")
+
+[node name="MainContainer" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 80.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="NavigationPanel" type="Panel" parent="MainContainer"]
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_6")
+
+[node name="NavigationContainer" type="VBoxContainer" parent="MainContainer/NavigationPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 15.0
+offset_top = 15.0
+offset_right = -15.0
+offset_bottom = -15.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="NavigationTitle" type="Label" parent="MainContainer/NavigationPanel/NavigationContainer"]
+layout_mode = 2
+text = "NAVIGATION"
+label_settings = SubResource("LabelSettings_3")
+
+[node name="Separator1" type="HSeparator" parent="MainContainer/NavigationPanel/NavigationContainer"]
+layout_mode = 2
+
+[node name="GameButton" type="Button" parent="MainContainer/NavigationPanel/NavigationContainer"]
+layout_mode = 2
+theme_override_styles/hover = SubResource("StyleBoxFlat_4")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_3")
+theme_override_styles/normal = SubResource("StyleBoxFlat_2")
+text = "🎮 GAME MODE"
+
+[node name="GradesButton" type="Button" parent="MainContainer/NavigationPanel/NavigationContainer"]
+layout_mode = 2
+theme_override_styles/hover = SubResource("StyleBoxFlat_4")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_3")
+theme_override_styles/normal = SubResource("StyleBoxFlat_2")
+text = "📊 GRADES (NOTEN)"
+
+[node name="CalendarButton" type="Button" parent="MainContainer/NavigationPanel/NavigationContainer"]
+layout_mode = 2
+theme_override_styles/hover = SubResource("StyleBoxFlat_4")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_3")
+theme_override_styles/normal = SubResource("StyleBoxFlat_2")
+text = "📅 CALENDAR (AGENDA)"
+
+[node name="AchievementsButton" type="Button" parent="MainContainer/NavigationPanel/NavigationContainer"]
+layout_mode = 2
+theme_override_styles/hover = SubResource("StyleBoxFlat_4")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_3")
+theme_override_styles/normal = SubResource("StyleBoxFlat_2")
+text = "🏆 ACHIEVEMENTS"
+
+[node name="CharacterButton" type="Button" parent="MainContainer/NavigationPanel/NavigationContainer"]
+layout_mode = 2
+theme_override_styles/hover = SubResource("StyleBoxFlat_4")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_3")
+theme_override_styles/normal = SubResource("StyleBoxFlat_2")
+text = "👤 CHARACTER"
+
+[node name="SettingsButton" type="Button" parent="MainContainer/NavigationPanel/NavigationContainer"]
+layout_mode = 2
+theme_override_styles/hover = SubResource("StyleBoxFlat_4")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_3")
+theme_override_styles/normal = SubResource("StyleBoxFlat_2")
+text = "⚙️ SETTINGS"
+
+[node name="Separator2" type="HSeparator" parent="MainContainer/NavigationPanel/NavigationContainer"]
+layout_mode = 2
+
+[node name="QuestLog" type="Label" parent="MainContainer/NavigationPanel/NavigationContainer"]
+layout_mode = 2
+text = "QUEST LOG"
+label_settings = SubResource("LabelSettings_3")
+
+[node name="QuestItem1" type="Label" parent="MainContainer/NavigationPanel/NavigationContainer"]
+modulate = Color(1, 0.8, 0.4, 1)
+layout_mode = 2
+text = "🗡️ Defeat Math Exam Boss"
+
+[node name="QuestItem2" type="Label" parent="MainContainer/NavigationPanel/NavigationContainer"]
+modulate = Color(0.8, 1, 0.8, 1)
+layout_mode = 2
+text = "📚 Complete 5 Assignments"
+
+[node name="ContentArea" type="Panel" parent="MainContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_5")
+
+[node name="ContentContainer" type="VBoxContainer" parent="MainContainer/ContentArea"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 30.0
+offset_top = 30.0
+offset_right = -30.0
+offset_bottom = -30.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="WelcomeTitle" type="Label" parent="MainContainer/ContentArea/ContentContainer"]
+layout_mode = 2
+text = "Welcome to Schulnetz RPG!"
+label_settings = SubResource("LabelSettings_4")
+
+[node name="WelcomeDescription" type="RichTextLabel" parent="MainContainer/ContentArea/ContentContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+text = "[color=#2c3e50]Transform your school experience into an epic adventure!
+
+[b]🎮 Game Features:[/b]
+• Turn exams into boss battles
+• Gain XP from good grades
+• Unlock achievements and rewards
+• Customize your character
+• Survive the academic semester
+
+[b]📊 Grade Integration:[/b] 
+Your real grades affect your game progress. Get ready to level up your education!
+
+[color=#e74c3c][b]⚔️ Current Status:[/b][/color]
+• HP: 75/100 (Recent exam damage)
+• Level: 3
+• Next Exam Boss: Mathematics (in 3 days)
+• Checkpoint: Winter Break (in 2 weeks)[/color]"
+
+[node name="StatsContainer" type="HBoxContainer" parent="MainContainer/ContentArea/ContentContainer"]
+layout_mode = 2
+
+[node name="StatsCard1" type="Panel" parent="MainContainer/ContentArea/ContentContainer/StatsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_2")
+
+[node name="StatsContent1" type="VBoxContainer" parent="MainContainer/ContentArea/ContentContainer/StatsContainer/StatsCard1"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 15.0
+offset_top = 15.0
+offset_right = -15.0
+offset_bottom = -15.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="StatsTitle1" type="Label" parent="MainContainer/ContentArea/ContentContainer/StatsContainer/StatsCard1/StatsContent1"]
+layout_mode = 2
+text = "📈 Grade Average"
+label_settings = SubResource("LabelSettings_5")
+
+[node name="StatsValue1" type="Label" parent="MainContainer/ContentArea/ContentContainer/StatsContainer/StatsCard1/StatsContent1"]
+layout_mode = 2
+text = "4.8 / 6.0"
+label_settings = SubResource("LabelSettings_6")
+
+[node name="StatsCard2" type="Panel" parent="MainContainer/ContentArea/ContentContainer/StatsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_2")
+
+[node name="StatsContent2" type="VBoxContainer" parent="MainContainer/ContentArea/ContentContainer/StatsContainer/StatsCard2"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 15.0
+offset_top = 15.0
+offset_right = -15.0
+offset_bottom = -15.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="StatsTitle2" type="Label" parent="MainContainer/ContentArea/ContentContainer/StatsContainer/StatsCard2/StatsContent2"]
+layout_mode = 2
+text = "🏆 Achievements"
+label_settings = SubResource("LabelSettings_5")
+
+[node name="StatsValue2" type="Label" parent="MainContainer/ContentArea/ContentContainer/StatsContainer/StatsCard2/StatsContent2"]
+layout_mode = 2
+text = "7 / 25"
+label_settings = SubResource("LabelSettings_6")
+
+[node name="StatsCard3" type="Panel" parent="MainContainer/ContentArea/ContentContainer/StatsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_2")
+
+[node name="StatsContent3" type="VBoxContainer" parent="MainContainer/ContentArea/ContentContainer/StatsContainer/StatsCard3"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 15.0
+offset_top = 15.0
+offset_right = -15.0
+offset_bottom = -15.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="StatsTitle3" type="Label" parent="MainContainer/ContentArea/ContentContainer/StatsContainer/StatsCard3/StatsContent3"]
+layout_mode = 2
+text = "⚔️ Boss Defeats"
+label_settings = SubResource("LabelSettings_5")
+
+[node name="StatsValue3" type="Label" parent="MainContainer/ContentArea/ContentContainer/StatsContainer/StatsCard3/StatsContent3"]
+layout_mode = 2
+text = "3 / 8"
+label_settings = SubResource("LabelSettings_6")
