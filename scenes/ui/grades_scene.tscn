@@ -3,6 +3,9 @@
 [sub_resource type="GDScript" id="GDScript_1"]
 script/source = "extends Control
 
+var setup_scene = null
+var is_auto_login_in_progress = false
+
 # Swiss Grade System (6-point scale)
 func calculate_grade_points(grade: float) -> float:
 	var rounded_grade = round(grade * 2) / 2.0
@@ -31,6 +34,44 @@ var grade_data = [
 func _ready():
 	setup_grade_display()
 	$Header/HeaderContent/BackButton.pressed.connect(_on_back_button_pressed)
+	
+	# Connect to SchulnetzManager signals
+	if SchulnetzManager:
+		SchulnetzManager.setup_required.connect(_on_setup_required)
+		SchulnetzManager.auto_login_started.connect(_on_auto_login_started)
+		SchulnetzManager.auto_login_completed.connect(_on_auto_login_completed)
+		SchulnetzManager.login_success.connect(_on_login_success)
+	
+	# Load setup scene and add it as a child
+	setup_scene = preload(\"res://scenes/ui/setup_scene.tscn\").instantiate()
+	add_child(setup_scene)
+	setup_scene.setup_completed.connect(_on_setup_completed)
+	setup_scene.setup_cancelled.connect(_on_setup_cancelled)
+
+func _on_auto_login_started():
+	is_auto_login_in_progress = true
+	print(\"🔄 Auto-login started in grades scene\")
+
+func _on_auto_login_completed(success: bool):
+	is_auto_login_in_progress = false
+	if success:
+		print(\"✅ Auto-login successful in grades scene - could fetch real grades now\")
+	else:
+		print(\"❌ Auto-login failed in grades scene\")
+
+func _on_login_success(session_data: Dictionary):
+	print(\"✅ Login successful in grades scene - could fetch real grades now\")
+
+func _on_setup_required():
+	print(\"Setup required - showing setup dialog in grades scene\")
+	if setup_scene:
+		setup_scene.show_setup()
+
+func _on_setup_completed():
+	print(\"Setup completed successfully in grades scene\")
+
+func _on_setup_cancelled():
+	print(\"Setup cancelled by user in grades scene\")
 
 func calculate_weighted_average(grades: Array, weights: Array) -> float:
 	var total_weight = 0.0

@@ -1,4 +1,119 @@
-[gd_scene format=3 uid="uid://eh4p8k9l0m6n2"]
+[gd_scene load_steps=6 format=3 uid="uid://mpunjddggbwb"]
+
+[sub_resource type="GDScript" id="GDScript_1"]
+script/source = "extends Control
+
+var setup_scene = null
+
+func _ready():
+	$Header/HeaderContent/BackButton.pressed.connect(_on_back_button_pressed)
+	$SettingsContent/SchulnetzSetupButton.pressed.connect(_on_schulnetz_setup_button_pressed)
+	$SettingsContent/ShowCredentialsButton.pressed.connect(_on_debug_credentials_pressed)
+	$SettingsContent/ShowCookiesButton.pressed.connect(_on_show_cookies_pressed)
+	
+	# Connect to SchulnetzManager signals
+	if SchulnetzManager:
+		SchulnetzManager.setup_required.connect(_on_setup_required)
+	
+	# Load setup scene and add it as a child
+	setup_scene = preload(\"res://scenes/ui/setup_scene.tscn\").instantiate()
+	add_child(setup_scene)
+	setup_scene.setup_completed.connect(_on_setup_completed)
+	setup_scene.setup_cancelled.connect(_on_setup_cancelled)
+
+func _on_back_button_pressed():
+	get_tree().change_scene_to_file(\"res://scenes/ui/main_menu.tscn\")
+
+func _on_setup_required():
+	print(\"Setup required - showing setup dialog in settings scene\")
+	if setup_scene:
+		setup_scene.show_setup()
+
+func _on_setup_completed():
+	print(\"Setup completed successfully in settings scene\")
+
+func _on_setup_cancelled():
+	print(\"Setup cancelled by user in settings scene\")
+
+func _on_schulnetz_setup_button_pressed():
+	print(\"Manual setup requested\")
+	if setup_scene:
+		setup_scene.show_setup()
+
+func _on_debug_credentials_pressed():
+	print(\"🔍 Checking saved credentials...\")
+	if FileAccess.file_exists(\"user://data/credentials.json\"):
+		var file = FileAccess.open(\"user://data/credentials.json\", FileAccess.READ)
+		if file:
+			var content = file.get_as_text()
+			file.close()
+			print(\"✅ Credentials file found: \", content)
+		else:
+			print(\"❌ Could not read credentials file\")
+	else:
+		print(\"❌ No credentials file found\")
+
+func _on_debug_scheduler_data_pressed():
+	print(\"🔍 Checking saved scheduler data...\")
+	
+	# Check internal storage
+	if FileAccess.file_exists(\"user://data/scheduler_latest.html\"):
+		var file = FileAccess.open(\"user://data/scheduler_latest.html\", FileAccess.READ)
+		if file:
+			var size = file.get_length()
+			file.close()
+			print(\"✅ Internal scheduler data found: %d bytes\" % size)
+		else:
+			print(\"❌ Could not read internal scheduler data\")
+	else:
+		print(\"❌ No internal scheduler data found\")
+	
+	# Check external storage
+	var external_path = \"C:/Users/minos/Documents/gradedata/scheduler_latest.html\"
+	if FileAccess.file_exists(external_path):
+		var file = FileAccess.open(external_path, FileAccess.READ)
+		if file:
+			var size = file.get_length()
+			file.close()
+			print(\"✅ External scheduler backup found: %d bytes\" % size)
+		else:
+			print(\"❌ Could not read external scheduler backup\")
+	else:
+		print(\"❌ No external scheduler backup found\")
+	
+	# Check summary file
+	if FileAccess.file_exists(\"user://data/scheduler_summary.json\"):
+		var file = FileAccess.open(\"user://data/scheduler_summary.json\", FileAccess.READ)
+		if file:
+			var content = file.get_as_text()
+			file.close()
+			print(\"📋 Scheduler summary: \", content)
+		else:
+			print(\"❌ Could not read scheduler summary\")
+	else:
+		print(\"❌ No scheduler summary found\")
+
+func _on_open_data_folders_pressed():
+	print(\"📂 Opening data folders...\")
+	
+	# Try to open the external folder in Windows Explorer
+	var external_path = \"C:/Users/minos/Documents/gradedata\"
+	OS.shell_open(external_path)
+	
+	# Also print the internal path for reference
+	var internal_path = OS.get_user_data_dir() + \"/data\"
+	print(\"📁 Internal data path: \", internal_path)
+	print(\"📁 External data path: \", external_path)
+
+func _on_show_cookies_pressed():
+	print(\"🍪 Checking session cookies...\")
+	if SchulnetzManager and SchulnetzManager.session_cookies.size() > 0:
+		print(\"✅ Session cookies found:\")
+		for cookie_name in SchulnetzManager.session_cookies:
+			print(\"  - %s: %s\" % [cookie_name, SchulnetzManager.session_cookies[cookie_name]])
+	else:
+		print(\"❌ No session cookies found\")
+"
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
 bg_color = Color(0.11, 0.15, 0.25, 1)
@@ -15,17 +130,6 @@ corner_radius_bottom_left = 8
 
 [sub_resource type="LabelSettings" id="LabelSettings_1"]
 font_size = 24
-font_color = Color(1, 1, 1, 1)
-
-[sub_resource type="GDScript" id="GDScript_1"]
-script/source = "extends Control
-
-func _ready():
-	$Header/HeaderContent/BackButton.pressed.connect(_on_back_button_pressed)
-
-func _on_back_button_pressed():
-	get_tree().change_scene_to_file(\"res://scenes/ui/main_menu.tscn\")
-"
 
 [node name="SettingsScene" type="Control"]
 layout_mode = 3
@@ -79,20 +183,58 @@ label_settings = SubResource("LabelSettings_1")
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="PlaceholderLabel" type="Label" parent="."]
+[node name="SettingsContent" type="VBoxContainer" parent="."]
 layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -150.0
-offset_top = -50.0
-offset_right = 150.0
-offset_bottom = 50.0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 50.0
+offset_top = 100.0
+offset_right = -50.0
+offset_bottom = -50.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "⚙️ Settings Scene
-Coming Soon!"
-horizontal_alignment = 1
-vertical_alignment = 1
+
+[node name="SettingsTitle" type="Label" parent="SettingsContent"]
+layout_mode = 2
+text = "Schulnetz Configuration"
+label_settings = SubResource("LabelSettings_1")
+
+[node name="Spacer1" type="Control" parent="SettingsContent"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="SchulnetzSetupButton" type="Button" parent="SettingsContent"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_3")
+text = "🔧 Configure Schulnetz URL"
+
+[node name="Spacer2" type="Control" parent="SettingsContent"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="DebugTitle" type="Label" parent="SettingsContent"]
+layout_mode = 2
+text = "Debug Information"
+label_settings = SubResource("LabelSettings_1")
+
+[node name="Spacer3" type="Control" parent="SettingsContent"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+
+[node name="ShowCredentialsButton" type="Button" parent="SettingsContent"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_3")
+text = "📋 Show Saved Credentials (Debug)"
+
+[node name="Spacer4" type="Control" parent="SettingsContent"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+
+[node name="ShowCookiesButton" type="Button" parent="SettingsContent"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_3")
+text = "🍪 Show Session Cookies (Debug)"

@@ -1,0 +1,354 @@
+[gd_scene load_steps=6 format=3 uid="uid://braw3x7y801a2"]
+
+[sub_resource type="GDScript" id="GDScript_1"]
+script/source = "extends Control
+
+signal setup_completed()
+signal setup_cancelled()
+
+@onready var url_input = $SetupDialog/VBox/FormContainer/URLInput
+@onready var username_input = $SetupDialog/VBox/FormContainer/UsernameInput
+@onready var password_input = $SetupDialog/VBox/FormContainer/PasswordInput
+@onready var url_label = $SetupDialog/VBox/FormContainer/URLLabel
+@onready var username_label = $SetupDialog/VBox/FormContainer/UsernameLabel
+@onready var password_label = $SetupDialog/VBox/FormContainer/PasswordLabel
+@onready var setup_button = $SetupDialog/VBox/ButtonContainer/SetupButton
+@onready var cancel_button = $SetupDialog/VBox/ButtonContainer/CancelButton
+@onready var status_label = $SetupDialog/VBox/StatusLabel
+@onready var title_label = $SetupDialog/VBox/Title
+@onready var description_label = $SetupDialog/VBox/Description
+
+var setup_step = 1  # 1 = URL setup, 2 = Login setup
+var configured_url = \"\"
+
+func _ready():
+	setup_button.pressed.connect(_on_setup_button_pressed)
+	cancel_button.pressed.connect(_on_cancel_button_pressed)
+	visible = false
+	
+	# Connect to SchulnetzManager signals for login
+	if SchulnetzManager:
+		SchulnetzManager.login_success.connect(_on_login_success)
+		SchulnetzManager.login_failed.connect(_on_login_failed)
+
+func show_setup():
+	visible = true
+	setup_step = 1
+	show_url_setup()
+
+func hide_setup():
+	visible = false
+
+func show_url_setup():
+	setup_step = 1
+	title_label.text = \"⚙️ SCHULNETZ SETUP\"
+	description_label.text = \"[center]Welcome to Schulnetz RPG!
+
+To get started, please enter your school's Schulnetz URL.[/center]
+
+[b]Example URLs:[/b]
+• https://www.schul-netz.com/ausserschwyz/
+• https://www.schul-netz.com/yourschool/
+
+[color=gray]You can find this URL by visiting your school's Schulnetz login page.[/color]\"
+	
+	url_label.visible = true
+	url_input.visible = true
+	username_label.visible = false
+	username_input.visible = false
+	password_label.visible = false
+	password_input.visible = false
+	setup_button.text = \"NEXT\"
+	cancel_button.text = \"CANCEL\"
+	
+	url_input.grab_focus()
+	set_status(\"\", false)
+
+func show_login_setup():
+	setup_step = 2
+	title_label.text = \"🔐 LOGIN CREDENTIALS\"
+	description_label.text = \"[center]Now enter your Schulnetz login credentials.
+
+[color=yellow]Note: Your credentials will be saved locally for automatic login.[/color]
+
+[color=gray]This is for development purposes. In production, use secure storage.[/color][/center]\"
+	
+	url_label.visible = false
+	url_input.visible = false
+	username_label.visible = true
+	username_input.visible = true
+	password_label.visible = true
+	password_input.visible = true
+	setup_button.text = \"LOGIN & SAVE\"
+	cancel_button.text = \"← BACK\"
+	
+	username_input.grab_focus()
+	set_status(\"\", false)
+
+func _on_setup_button_pressed():
+	if setup_step == 1:
+		# URL Setup Step
+		var url = url_input.text.strip_edges()
+		
+		if url.is_empty():
+			set_status(\"Please enter your Schulnetz URL\", true)
+			return
+		
+		# Basic URL validation
+		if not url.contains(\"schul-netz.com\"):
+			set_status(\"Please enter a valid Schulnetz URL (must contain 'schul-netz.com')\", true)
+			return
+		
+		set_status(\"Configuring school...\", false)
+		setup_button.disabled = true
+		
+		# Configure SchulnetzManager
+		if SchulnetzManager:
+			var success = SchulnetzManager.setup_school_configuration(url)
+			if success:
+				configured_url = url
+				set_status(\"School configured! Now enter your login credentials.\", false)
+				await get_tree().create_timer(1.5).timeout
+				show_login_setup()
+			else:
+				set_status(\"Failed to extract school identifier from URL. Please check the URL format.\", true)
+			setup_button.disabled = false
+		else:
+			set_status(\"SchulnetzManager not available\", true)
+			setup_button.disabled = false
+	
+	elif setup_step == 2:
+		# Login Setup Step
+		var username = username_input.text.strip_edges()
+		var password = password_input.text.strip_edges()
+		
+		if username.is_empty() or password.is_empty():
+			set_status(\"Please enter both username and password\", true)
+			return
+		
+		set_status(\"Testing login...\", false)
+		setup_button.disabled = true
+		
+		# Try to login with SchulnetzManager
+		if SchulnetzManager:
+			SchulnetzManager.login_to_schulnetz(username, password)
+		else:
+			set_status(\"SchulnetzManager not available\", true)
+			setup_button.disabled = false
+
+func _on_login_success(session_data: Dictionary):
+	print(\"Login successful! Session data: \", session_data)
+	
+	# Save credentials to data folder
+	save_credentials(username_input.text.strip_edges(), password_input.text.strip_edges())
+	
+	set_status(\"Login successful! Credentials saved.\", false)
+	await get_tree().create_timer(2.0).timeout
+	setup_button.disabled = false
+	hide_setup()
+	setup_completed.emit()
+
+func _on_login_failed(error: String):
+	print(\"Login failed: \", error)
+	set_status(\"Login failed: \" + error, true)
+	setup_button.disabled = false
+
+func save_credentials(username: String, password: String):
+	# Create data directory if it doesn't exist
+	if not DirAccess.dir_exists_absolute(\"user://data\"):
+		DirAccess.open(\"user://\").make_dir(\"data\")
+	
+	var credentials = {
+		\"username\": username,
+		\"password\": password,
+		\"school_url\": configured_url,
+		\"saved_at\": Time.get_datetime_string_from_system()
+	}
+	
+	var file = FileAccess.open(\"user://data/credentials.json\", FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(credentials))
+		file.close()
+		print(\"Credentials saved to: user://data/credentials.json\")
+	else:
+		print(\"Failed to save credentials\")
+
+func _on_cancel_button_pressed():
+	if setup_step == 2:
+		# Go back to URL setup
+		show_url_setup()
+	else:
+		# Cancel entire setup
+		hide_setup()
+		setup_cancelled.emit()
+
+func set_status(message: String, is_error: bool):
+	status_label.text = message
+	status_label.modulate = Color.RED if is_error else Color.WHITE
+	status_label.visible = not message.is_empty()
+
+func _input(event):
+	if visible and event.is_action_pressed(\"ui_accept\"):
+		_on_setup_button_pressed()
+	elif visible and event.is_action_pressed(\"ui_cancel\"):
+		_on_cancel_button_pressed()
+"
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
+bg_color = Color(0.1, 0.1, 0.1, 0.8)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2"]
+bg_color = Color(0.2, 0.25, 0.35, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_4"]
+bg_color = Color(0.3, 0.35, 0.45, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3"]
+bg_color = Color(0.15, 0.39, 0.61, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="SetupScene" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = SubResource("GDScript_1")
+
+[node name="Background" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_1")
+
+[node name="SetupDialog" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = -200.0
+offset_right = 250.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_2")
+
+[node name="VBox" type="VBoxContainer" parent="SetupDialog"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="SetupDialog/VBox"]
+layout_mode = 2
+text = "⚙️ SCHULNETZ SETUP"
+horizontal_alignment = 1
+
+[node name="Spacer1" type="Control" parent="SetupDialog/VBox"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="Description" type="RichTextLabel" parent="SetupDialog/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+text = "[center]Welcome to Schulnetz RPG!
+
+To get started, please enter your school's Schulnetz URL.[/center]
+
+[b]Example URLs:[/b]
+• https://www.schul-netz.com/ausserschwyz/
+• https://www.schul-netz.com/yourschool/
+
+[color=gray]You can find this URL by visiting your school's Schulnetz login page.[/color]"
+
+[node name="Spacer2" type="Control" parent="SetupDialog/VBox"]
+custom_minimum_size = Vector2(0, 15)
+layout_mode = 2
+
+[node name="FormContainer" type="VBoxContainer" parent="SetupDialog/VBox"]
+layout_mode = 2
+
+[node name="URLLabel" type="Label" parent="SetupDialog/VBox/FormContainer"]
+layout_mode = 2
+text = "Schulnetz URL:"
+
+[node name="URLInput" type="LineEdit" parent="SetupDialog/VBox/FormContainer"]
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_4")
+placeholder_text = "https://www.schul-netz.com/yourschool/"
+
+[node name="UsernameLabel" type="Label" parent="SetupDialog/VBox/FormContainer"]
+visible = false
+layout_mode = 2
+text = "Username:"
+
+[node name="UsernameInput" type="LineEdit" parent="SetupDialog/VBox/FormContainer"]
+visible = false
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_4")
+placeholder_text = "Enter your Schulnetz username"
+
+[node name="PasswordLabel" type="Label" parent="SetupDialog/VBox/FormContainer"]
+visible = false
+layout_mode = 2
+text = "Password:"
+
+[node name="PasswordInput" type="LineEdit" parent="SetupDialog/VBox/FormContainer"]
+visible = false
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_4")
+placeholder_text = "Enter your Schulnetz password"
+secret = true
+
+[node name="Spacer3" type="Control" parent="SetupDialog/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="StatusLabel" type="Label" parent="SetupDialog/VBox"]
+visible = false
+layout_mode = 2
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="ButtonContainer" type="HBoxContainer" parent="SetupDialog/VBox"]
+layout_mode = 2
+
+[node name="CancelButton" type="Button" parent="SetupDialog/VBox/ButtonContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "CANCEL"
+
+[node name="Spacer4" type="Control" parent="SetupDialog/VBox/ButtonContainer"]
+custom_minimum_size = Vector2(10, 0)
+layout_mode = 2
+
+[node name="SetupButton" type="Button" parent="SetupDialog/VBox/ButtonContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/normal = SubResource("StyleBoxFlat_3")
+text = "SETUP"

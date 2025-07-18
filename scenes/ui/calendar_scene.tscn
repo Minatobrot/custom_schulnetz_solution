@@ -1,40 +1,64 @@
-[gd_scene format=3 uid="uid://bh7k9m5n2p4q1"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
-bg_color = Color(0.11, 0.15, 0.25, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2"]
-bg_color = Color(0.2, 0.25, 0.35, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3"]
-bg_color = Color(0.15, 0.39, 0.61, 1)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
-
-[sub_resource type="LabelSettings" id="LabelSettings_1"]
-font_size = 24
-font_color = Color(1, 1, 1, 1)
+[gd_scene load_steps=6 format=3 uid="uid://bh7lam5n2p4q1"]
 
 [sub_resource type="GDScript" id="GDScript_1"]
 script/source = "extends Control
 
 var calendar_events: Array = []
 var is_loading: bool = false
+var setup_scene = null
+var is_auto_login_in_progress = false
 
 func _ready():
 	$Header/HeaderContent/BackButton.pressed.connect(_on_back_button_pressed)
-	$CalendarContent/RefreshButton.pressed.connect(_on_refresh_button_pressed)
+	$CalendarContent/ControlBar/RefreshButton.pressed.connect(_on_refresh_button_pressed)
 	
 	# Connect to SchulnetzManager signals
 	if SchulnetzManager:
 		SchulnetzManager.data_received.connect(_on_data_received)
 		SchulnetzManager.login_failed.connect(_on_login_failed)
-		
-		# Auto-fetch calendar data if logged in
-		if SchulnetzManager.session_active:
-			fetch_calendar_data()
+		SchulnetzManager.setup_required.connect(_on_setup_required)
+		SchulnetzManager.auto_login_started.connect(_on_auto_login_started)
+		SchulnetzManager.auto_login_completed.connect(_on_auto_login_completed)
+		SchulnetzManager.login_success.connect(_on_login_success)
+	
+	# Load setup scene and add it as a child
+	setup_scene = preload(\"res://scenes/ui/setup_scene.tscn\").instantiate()
+	add_child(setup_scene)
+	setup_scene.setup_completed.connect(_on_setup_completed)
+	setup_scene.setup_cancelled.connect(_on_setup_cancelled)
+	
+	# Wait a moment for auto-login to complete before trying to fetch data
+	await get_tree().create_timer(1.0).timeout
+	if SchulnetzManager and SchulnetzManager.session_active:
+		fetch_calendar_data()
+
+func _on_auto_login_started():
+	is_auto_login_in_progress = true
+	show_status(\"🔄 Logging in automatically...\", false)
+
+func _on_auto_login_completed(success: bool):
+	is_auto_login_in_progress = false
+	if success:
+		show_status(\"✅ Logged in! Loading calendar...\", false)
+		await get_tree().create_timer(1.0).timeout
+		fetch_calendar_data()
+	# If failed, setup_required will be triggered
+
+func _on_login_success(session_data: Dictionary):
+	show_status(\"✅ Login successful! Loading calendar...\", false)
+	await get_tree().create_timer(1.0).timeout
+	fetch_calendar_data()
+
+func show_status(message: String, is_error: bool):
+	var error_label = $CalendarContent/ErrorLabel
+	error_label.text = message
+	error_label.modulate = Color.RED if is_error else Color.GREEN
+	error_label.visible = true
+	
+	if not is_error:
+		await get_tree().create_timer(3.0).timeout
+		if is_instance_valid(error_label):
+			error_label.visible = false
 
 func _on_back_button_pressed():
 	get_tree().change_scene_to_file(\"res://scenes/ui/main_menu.tscn\")
@@ -51,9 +75,16 @@ func fetch_calendar_data():
 	
 	if SchulnetzManager.session_active:
 		SchulnetzManager.fetch_calendar()
+	elif is_auto_login_in_progress:
+		# Auto-login is in progress, wait
+		show_status(\"🔄 Waiting for login to complete...\", false)
+		is_loading = false
+		update_ui_state()
 	else:
-		# Need to login first
-		show_login_prompt()
+		# No session and no auto-login in progress
+		show_status(\"❌ Please log in to Schulnetz first\", true)
+		is_loading = false
+		update_ui_state()
 
 func _on_data_received(data_type: String, data: Dictionary):
 	if data_type == \"calendar\":
@@ -67,6 +98,18 @@ func _on_login_failed(error: String):
 	update_ui_state()
 	show_error(\"Login failed: \" + error)
 
+func _on_setup_required():
+	print(\"Setup required - showing setup dialog in calendar scene\")
+	if setup_scene:
+		setup_scene.show_setup()
+
+func _on_setup_completed():
+	print(\"Setup completed successfully in calendar scene\")
+	# Optionally show a success message
+
+func _on_setup_cancelled():
+	print(\"Setup cancelled by user in calendar scene\")
+
 func display_calendar_events():
 	var container = $CalendarContent/ScrollContainer/EventsList
 	
@@ -75,67 +118,217 @@ func display_calendar_events():
 		child.queue_free()
 	
 	if calendar_events.is_empty():
+		var no_events_panel = Panel.new()
+		no_events_panel.custom_minimum_size = Vector2(0, 100)
+		
+		var style_box = StyleBoxFlat.new()
+		style_box.bg_color = Color(0.2, 0.2, 0.3, 0.8)
+		style_box.corner_radius_top_left = 8
+		style_box.corner_radius_top_right = 8
+		style_box.corner_radius_bottom_left = 8
+		style_box.corner_radius_bottom_right = 8
+		no_events_panel.add_theme_stylebox_override(\"panel\", style_box)
+		
 		var no_events_label = Label.new()
-		no_events_label.text = \"No events found\"
+		no_events_label.text = \"📅 No events found\\n\\nTry refreshing or check your connection.\"
 		no_events_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		container.add_child(no_events_label)
+		no_events_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		no_events_label.add_theme_font_size_override(\"font_size\", 16)
+		no_events_label.add_theme_color_override(\"font_color\", Color.LIGHT_GRAY)
+		
+		no_events_panel.add_child(no_events_label)
+		no_events_label.anchors_preset = Control.PRESET_FULL_RECT
+		container.add_child(no_events_panel)
 		return
 	
-	# Create event items
-	for event in calendar_events:
+	# Add header with count
+	var header_label = Label.new()
+	header_label.text = \"📋 Found %d event(s):\" % calendar_events.size()
+	header_label.add_theme_font_size_override(\"font_size\", 18)
+	header_label.add_theme_color_override(\"font_color\", Color.WHITE)
+	header_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	container.add_child(header_label)
+	
+	# Add spacing
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 15)
+	container.add_child(spacer)
+	
+	# Create event items with spacing
+	for i in range(calendar_events.size()):
+		var event = calendar_events[i]
 		var event_item = create_event_item(event)
 		container.add_child(event_item)
+		
+		# Add spacing between events (except for the last one)
+		if i < calendar_events.size() - 1:
+			var event_spacer = Control.new()
+			event_spacer.custom_minimum_size = Vector2(0, 10)
+			container.add_child(event_spacer)
 
 func create_event_item(event: Dictionary) -> Control:
 	var item = Panel.new()
-	item.custom_minimum_size = Vector2(0, 80)
+	item.custom_minimum_size = Vector2(0, 120)
+	
+	# Create a nice looking panel style
+	var style_box = StyleBoxFlat.new()
+	var event_type = event.get(\"type\", \"event\")
+	
+	# Color code by event type
+	match event_type:
+		\"exam\":
+			style_box.bg_color = Color(0.8, 0.2, 0.2, 0.9)  # Red for exams
+		\"info\":
+			style_box.bg_color = Color(0.2, 0.6, 0.8, 0.9)  # Blue for info
+		_:
+			style_box.bg_color = Color(0.3, 0.6, 0.3, 0.9)  # Green for regular events
+	
+	style_box.corner_radius_top_left = 12
+	style_box.corner_radius_top_right = 12
+	style_box.corner_radius_bottom_left = 12
+	style_box.corner_radius_bottom_right = 12
+	style_box.border_width_left = 2
+	style_box.border_width_right = 2
+	style_box.border_width_top = 2
+	style_box.border_width_bottom = 2
+	style_box.border_color = Color.WHITE.darkened(0.3)
+	
+	item.add_theme_stylebox_override(\"panel\", style_box)
+	
+	# Main container with padding
+	var margin_container = MarginContainer.new()
+	margin_container.add_theme_constant_override(\"margin_left\", 15)
+	margin_container.add_theme_constant_override(\"margin_right\", 15)
+	margin_container.add_theme_constant_override(\"margin_top\", 12)
+	margin_container.add_theme_constant_override(\"margin_bottom\", 12)
+	item.add_child(margin_container)
 	
 	var vbox = VBoxContainer.new()
-	item.add_child(vbox)
+	vbox.add_theme_constant_override(\"separation\", 6)
+	margin_container.add_child(vbox)
+	
+	# Title with icon
+	var title_container = HBoxContainer.new()
+	vbox.add_child(title_container)
+	
+	var icon_label = Label.new()
+	match event_type:
+		\"exam\":
+			icon_label.text = \"📝\"
+		\"info\":
+			icon_label.text = \"ℹ️\"
+		_:
+			icon_label.text = \"📚\"
+	icon_label.add_theme_font_size_override(\"font_size\", 20)
+	title_container.add_child(icon_label)
 	
 	var title_label = Label.new()
 	title_label.text = event.get(\"title\", \"Untitled Event\")
-	title_label.add_theme_font_size_override(\"font_size\", 16)
-	vbox.add_child(title_label)
+	title_label.add_theme_font_size_override(\"font_size\", 18)
+	title_label.add_theme_color_override(\"font_color\", Color.WHITE)
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_container.add_child(title_label)
 	
-	var date_time_label = Label.new()
+	# Subject badge (if available)
+	var subject = event.get(\"subject\", \"\")
+	if subject and subject != \"Unknown\" and subject != \"System\":
+		var subject_label = Label.new()
+		subject_label.text = \"📖 \" + subject
+		subject_label.add_theme_font_size_override(\"font_size\", 14)
+		subject_label.add_theme_color_override(\"font_color\", Color.YELLOW)
+		vbox.add_child(subject_label)
+	
+	# Date and time info
+	var datetime_container = HBoxContainer.new()
+	vbox.add_child(datetime_container)
+	
 	var date_text = event.get(\"date\", \"\")
 	var time_text = event.get(\"time\", \"\")
-	date_time_label.text = date_text + (\" \" + time_text if time_text else \"\")
-	date_time_label.modulate = Color(0.8, 0.8, 0.8, 1)
-	vbox.add_child(date_time_label)
 	
+	if date_text:
+		var date_label = Label.new()
+		date_label.text = \"📅 \" + date_text
+		date_label.add_theme_font_size_override(\"font_size\", 14)
+		date_label.add_theme_color_override(\"font_color\", Color.LIGHT_GRAY)
+		datetime_container.add_child(date_label)
+	
+	if time_text:
+		if date_text:
+			var spacer = Control.new()
+			spacer.custom_minimum_size = Vector2(20, 0)
+			datetime_container.add_child(spacer)
+		
+		var time_label = Label.new()
+		time_label.text = \"🕐 \" + time_text
+		time_label.add_theme_font_size_override(\"font_size\", 14)
+		time_label.add_theme_color_override(\"font_color\", Color.LIGHT_GRAY)
+		datetime_container.add_child(time_label)
+	
+	# Additional info (room, teacher)
+	var room = event.get(\"room\", \"\")
+	var teacher = event.get(\"teacher\", \"\")
+	
+	if room or teacher:
+		var info_container = HBoxContainer.new()
+		vbox.add_child(info_container)
+		
+		if room:
+			var room_label = Label.new()
+			room_label.text = \"🏠 \" + room
+			room_label.add_theme_font_size_override(\"font_size\", 12)
+			room_label.add_theme_color_override(\"font_color\", Color.CYAN)
+			info_container.add_child(room_label)
+		
+		if teacher:
+			if room:
+				var spacer = Control.new()
+				spacer.custom_minimum_size = Vector2(15, 0)
+				info_container.add_child(spacer)
+			
+			var teacher_label = Label.new()
+			teacher_label.text = \"👨‍🏫 \" + teacher
+			teacher_label.add_theme_font_size_override(\"font_size\", 12)
+			teacher_label.add_theme_color_override(\"font_color\", Color.LIGHT_GREEN)
+			info_container.add_child(teacher_label)
+	
+	# Description (if available)
 	var desc = event.get(\"description\", \"\")
 	if desc:
 		var desc_label = Label.new()
 		desc_label.text = desc
 		desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		desc_label.modulate = Color(0.9, 0.9, 0.9, 1)
+		desc_label.add_theme_font_size_override(\"font_size\", 12)
+		desc_label.add_theme_color_override(\"font_color\", Color.LIGHT_GRAY)
 		vbox.add_child(desc_label)
 	
 	return item
 
 func update_ui_state():
-	var refresh_btn = $CalendarContent/RefreshButton
+	var refresh_btn = $CalendarContent/ControlBar/RefreshButton
 	var loading_label = $CalendarContent/LoadingLabel
 	
 	refresh_btn.disabled = is_loading
 	loading_label.visible = is_loading
 
-func show_login_prompt():
-	# TODO: Show login dialog
-	show_error(\"Please log in to Schulnetz first\")
-
 func show_error(message: String):
-	var error_label = $CalendarContent/ErrorLabel
-	error_label.text = message
-	error_label.visible = true
-	
-	# Hide error after 5 seconds
-	await get_tree().create_timer(5.0).timeout
-	if is_instance_valid(error_label):
-		error_label.visible = false
+	show_status(message, true)
 "
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
+bg_color = Color(0.11, 0.15, 0.25, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2"]
+bg_color = Color(0.2, 0.25, 0.35, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3"]
+bg_color = Color(0.15, 0.39, 0.61, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="LabelSettings" id="LabelSettings_1"]
+font_size = 24
 
 [node name="CalendarScene" type="Control"]
 layout_mode = 3
@@ -190,6 +383,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="PlaceholderLabel" type="Label" parent="."]
+visible = false
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -206,15 +400,14 @@ text = "📅 Calendar Scene
 Coming Soon!"
 horizontal_alignment = 1
 vertical_alignment = 1
-visible = false
 
 [node name="CalendarContent" type="VBoxContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = 80.0
 offset_left = 20.0
+offset_top = 80.0
 offset_right = -20.0
 offset_bottom = -20.0
 grow_horizontal = 2
@@ -233,17 +426,17 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="LoadingLabel" type="Label" parent="CalendarContent"]
+visible = false
 layout_mode = 2
 text = "Loading calendar events..."
 horizontal_alignment = 1
-visible = false
 
 [node name="ErrorLabel" type="Label" parent="CalendarContent"]
+visible = false
+modulate = Color(1, 0.5, 0.5, 1)
 layout_mode = 2
 text = "Error message"
 horizontal_alignment = 1
-modulate = Color(1, 0.5, 0.5, 1)
-visible = false
 
 [node name="ScrollContainer" type="ScrollContainer" parent="CalendarContent"]
 layout_mode = 2
