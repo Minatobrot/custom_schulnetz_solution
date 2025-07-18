@@ -14,3 +14,9 @@ config/name="Schulnetz RPG"
 run/main_scene="res://scenes/ui/main_menu.tscn"
 config/features=PackedStringArray("4.4", "Forward Plus")
 config/icon="res://icon.svg"
+
+[autoload]
+
+GameManager="*res://scripts/managers/GameManager.gd"
+GradeManager="*res://scripts/managers/GradeManager.gd"
+SchulnetzManager="*res://scripts/managers/SchulnetzManager.gd"

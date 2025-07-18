@@ -62,9 +62,9 @@ func add_xp(amount: float):
 	player_xp += amount
 	
 	while player_xp >= xp_to_next_level:
-		level_up()
+		handle_level_up()
 
-func level_up():
+func handle_level_up():
 	player_level += 1
 	player_xp -= xp_to_next_level
 	player_max_hp += 10  # Increase max HP on level up

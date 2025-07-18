@@ -1,0 +1,205 @@
+[gd_scene format=3 uid="uid://b8n5k2l3m4p6q"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
+bg_color = Color(0.1, 0.1, 0.1, 0.8)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2"]
+bg_color = Color(0.2, 0.25, 0.35, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3"]
+bg_color = Color(0.15, 0.39, 0.61, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_4"]
+bg_color = Color(0.3, 0.35, 0.45, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="GDScript" id="GDScript_1"]
+script/source = "extends Control
+
+signal login_requested(username: String, password: String)
+signal login_cancelled()
+
+@onready var username_input = $LoginDialog/VBox/FormContainer/UsernameInput
+@onready var password_input = $LoginDialog/VBox/FormContainer/PasswordInput
+@onready var login_button = $LoginDialog/VBox/ButtonContainer/LoginButton
+@onready var cancel_button = $LoginDialog/VBox/ButtonContainer/CancelButton
+@onready var status_label = $LoginDialog/VBox/StatusLabel
+
+func _ready():
+	login_button.pressed.connect(_on_login_button_pressed)
+	cancel_button.pressed.connect(_on_cancel_button_pressed)
+	
+	# Connect to SchulnetzManager signals
+	if SchulnetzManager:
+		SchulnetzManager.login_success.connect(_on_login_success)
+		SchulnetzManager.login_failed.connect(_on_login_failed)
+
+func show_login():
+	visible = true
+	username_input.grab_focus()
+	set_status(\"\", false)
+
+func hide_login():
+	visible = false
+
+func _on_login_button_pressed():
+	var username = username_input.text.strip()
+	var password = password_input.text.strip()
+	
+	if username.is_empty() or password.is_empty():
+		set_status(\"Please enter both username and password\", true)
+		return
+	
+	set_status(\"Logging in...\", false)
+	login_button.disabled = true
+	
+	# Start login process through SchulnetzManager
+	if SchulnetzManager:
+		SchulnetzManager.login_to_schulnetz(username, password)
+	else:
+		login_requested.emit(username, password)
+
+func _on_cancel_button_pressed():
+	hide_login()
+	login_cancelled.emit()
+
+func _on_login_success(session_data: Dictionary):
+	set_status(\"Login successful!\", false)
+	await get_tree().create_timer(1.0).timeout
+	hide_login()
+	login_button.disabled = false
+
+func _on_login_failed(error: String):
+	set_status(\"Login failed: \" + error, true)
+	login_button.disabled = false
+
+func set_status(message: String, is_error: bool):
+	status_label.text = message
+	status_label.modulate = Color.RED if is_error else Color.WHITE
+	status_label.visible = not message.is_empty()
+
+func _input(event):
+	if visible and event.is_action_pressed(\"ui_accept\"):
+		_on_login_button_pressed()
+	elif visible and event.is_action_pressed(\"ui_cancel\"):
+		_on_cancel_button_pressed()
+"
+
+[node name="LoginScene" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = SubResource("GDScript_1")
+
+[node name="Background" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_1")
+
+[node name="LoginDialog" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -150.0
+offset_right = 200.0
+offset_bottom = 150.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_2")
+
+[node name="VBox" type="VBoxContainer" parent="LoginDialog"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Title" type="Label" parent="LoginDialog/VBox"]
+layout_mode = 2
+text = "🔐 LOGIN TO SCHULNETZ"
+horizontal_alignment = 1
+
+[node name="Spacer1" type="Control" parent="LoginDialog/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 20)
+
+[node name="FormContainer" type="VBoxContainer" parent="LoginDialog/VBox"]
+layout_mode = 2
+
+[node name="UsernameLabel" type="Label" parent="LoginDialog/VBox/FormContainer"]
+layout_mode = 2
+text = "Username:"
+
+[node name="UsernameInput" type="LineEdit" parent="LoginDialog/VBox/FormContainer"]
+layout_mode = 2
+placeholder_text = "Enter your Schulnetz username"
+theme_override_styles/normal = SubResource("StyleBoxFlat_4")
+
+[node name="Spacer2" type="Control" parent="LoginDialog/VBox/FormContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 10)
+
+[node name="PasswordLabel" type="Label" parent="LoginDialog/VBox/FormContainer"]
+layout_mode = 2
+text = "Password:"
+
+[node name="PasswordInput" type="LineEdit" parent="LoginDialog/VBox/FormContainer"]
+layout_mode = 2
+placeholder_text = "Enter your Schulnetz password"
+secret = true
+theme_override_styles/normal = SubResource("StyleBoxFlat_4")
+
+[node name="Spacer3" type="Control" parent="LoginDialog/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="StatusLabel" type="Label" parent="LoginDialog/VBox"]
+layout_mode = 2
+horizontal_alignment = 1
+autowrap_mode = 2
+visible = false
+
+[node name="ButtonContainer" type="HBoxContainer" parent="LoginDialog/VBox"]
+layout_mode = 2
+
+[node name="CancelButton" type="Button" parent="LoginDialog/VBox/ButtonContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "CANCEL"
+
+[node name="Spacer4" type="Control" parent="LoginDialog/VBox/ButtonContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(10, 0)
+
+[node name="LoginButton" type="Button" parent="LoginDialog/VBox/ButtonContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/normal = SubResource("StyleBoxFlat_3")
+text = "LOGIN"

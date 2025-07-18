@@ -20,11 +20,121 @@ font_color = Color(1, 1, 1, 1)
 [sub_resource type="GDScript" id="GDScript_1"]
 script/source = "extends Control
 
+var calendar_events: Array = []
+var is_loading: bool = false
+
 func _ready():
 	$Header/HeaderContent/BackButton.pressed.connect(_on_back_button_pressed)
+	$CalendarContent/RefreshButton.pressed.connect(_on_refresh_button_pressed)
+	
+	# Connect to SchulnetzManager signals
+	if SchulnetzManager:
+		SchulnetzManager.data_received.connect(_on_data_received)
+		SchulnetzManager.login_failed.connect(_on_login_failed)
+		
+		# Auto-fetch calendar data if logged in
+		if SchulnetzManager.session_active:
+			fetch_calendar_data()
 
 func _on_back_button_pressed():
 	get_tree().change_scene_to_file(\"res://scenes/ui/main_menu.tscn\")
+
+func _on_refresh_button_pressed():
+	fetch_calendar_data()
+
+func fetch_calendar_data():
+	if is_loading:
+		return
+		
+	is_loading = true
+	update_ui_state()
+	
+	if SchulnetzManager.session_active:
+		SchulnetzManager.fetch_calendar()
+	else:
+		# Need to login first
+		show_login_prompt()
+
+func _on_data_received(data_type: String, data: Dictionary):
+	if data_type == \"calendar\":
+		calendar_events = data.get(\"events\", [])
+		display_calendar_events()
+		is_loading = false
+		update_ui_state()
+
+func _on_login_failed(error: String):
+	is_loading = false
+	update_ui_state()
+	show_error(\"Login failed: \" + error)
+
+func display_calendar_events():
+	var container = $CalendarContent/ScrollContainer/EventsList
+	
+	# Clear existing events
+	for child in container.get_children():
+		child.queue_free()
+	
+	if calendar_events.is_empty():
+		var no_events_label = Label.new()
+		no_events_label.text = \"No events found\"
+		no_events_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		container.add_child(no_events_label)
+		return
+	
+	# Create event items
+	for event in calendar_events:
+		var event_item = create_event_item(event)
+		container.add_child(event_item)
+
+func create_event_item(event: Dictionary) -> Control:
+	var item = Panel.new()
+	item.custom_minimum_size = Vector2(0, 80)
+	
+	var vbox = VBoxContainer.new()
+	item.add_child(vbox)
+	
+	var title_label = Label.new()
+	title_label.text = event.get(\"title\", \"Untitled Event\")
+	title_label.add_theme_font_size_override(\"font_size\", 16)
+	vbox.add_child(title_label)
+	
+	var date_time_label = Label.new()
+	var date_text = event.get(\"date\", \"\")
+	var time_text = event.get(\"time\", \"\")
+	date_time_label.text = date_text + (\" \" + time_text if time_text else \"\")
+	date_time_label.modulate = Color(0.8, 0.8, 0.8, 1)
+	vbox.add_child(date_time_label)
+	
+	var desc = event.get(\"description\", \"\")
+	if desc:
+		var desc_label = Label.new()
+		desc_label.text = desc
+		desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		desc_label.modulate = Color(0.9, 0.9, 0.9, 1)
+		vbox.add_child(desc_label)
+	
+	return item
+
+func update_ui_state():
+	var refresh_btn = $CalendarContent/RefreshButton
+	var loading_label = $CalendarContent/LoadingLabel
+	
+	refresh_btn.disabled = is_loading
+	loading_label.visible = is_loading
+
+func show_login_prompt():
+	# TODO: Show login dialog
+	show_error(\"Please log in to Schulnetz first\")
+
+func show_error(message: String):
+	var error_label = $CalendarContent/ErrorLabel
+	error_label.text = message
+	error_label.visible = true
+	
+	# Hide error after 5 seconds
+	await get_tree().create_timer(5.0).timeout
+	if is_instance_valid(error_label):
+		error_label.visible = false
 "
 
 [node name="CalendarScene" type="Control"]
@@ -96,3 +206,49 @@ text = "📅 Calendar Scene
 Coming Soon!"
 horizontal_alignment = 1
 vertical_alignment = 1
+visible = false
+
+[node name="CalendarContent" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 80.0
+offset_left = 20.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ControlBar" type="HBoxContainer" parent="CalendarContent"]
+layout_mode = 2
+
+[node name="RefreshButton" type="Button" parent="CalendarContent/ControlBar"]
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_3")
+text = "🔄 REFRESH"
+
+[node name="Spacer" type="Control" parent="CalendarContent/ControlBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="LoadingLabel" type="Label" parent="CalendarContent"]
+layout_mode = 2
+text = "Loading calendar events..."
+horizontal_alignment = 1
+visible = false
+
+[node name="ErrorLabel" type="Label" parent="CalendarContent"]
+layout_mode = 2
+text = "Error message"
+horizontal_alignment = 1
+modulate = Color(1, 0.5, 0.5, 1)
+visible = false
+
+[node name="ScrollContainer" type="ScrollContainer" parent="CalendarContent"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="EventsList" type="VBoxContainer" parent="CalendarContent/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
