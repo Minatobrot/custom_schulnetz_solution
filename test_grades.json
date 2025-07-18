@@ -1,0 +1,39 @@
+{
+  "timestamp": "2025-07-18T15:30:00.000Z",
+  "student": {
+    "name": "Test Student",
+    "class": "M2a"
+  },
+  "subjects": [
+    {
+      "code": "MA-M2a-BuA",
+      "name": "Mathematik",
+      "grade": "5.5",
+      "confirmed": "Ja"
+    },
+    {
+      "code": "DE-M2a-MaN",
+      "name": "Deutsch",
+      "grade": "4.0",
+      "confirmed": "Ja"
+    },
+    {
+      "code": "EN-M2a-JoH",
+      "name": "Englisch",
+      "grade": "5.0",
+      "confirmed": "Nein"
+    },
+    {
+      "code": "BG-M2a-CrN",
+      "name": "Bildnerisches Gestalten",
+      "grade": "6.0",
+      "confirmed": "Ja"
+    },
+    {
+      "code": "SP-M2a-WeS",
+      "name": "Sport",
+      "grade": "-",
+      "confirmed": "-"
+    }
+  ]
+}

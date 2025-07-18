@@ -23,10 +23,85 @@ var config_file_path: String = "user://schulnetz_config.json"
 
 var base_url: String = ""
 
+# Try to load existing grades data on startup for testing
+func load_existing_grades_for_testing():
+	var data_file = FileAccess.open("user://data/latest_grades.json", FileAccess.READ)
+	if data_file:
+		var json_text = data_file.get_as_text()
+		data_file.close()
+		var json = JSON.new()
+		var parse_result = json.parse(json_text)
+		if parse_result == OK:
+			var data = json.data
+			print("🎯 Found existing grades data! Processing...")
+			parse_grades_data_from_json(data)
+		else:
+			print("❌ Failed to parse existing grades JSON")
+	else:
+		print("📝 No existing grades data found - use manual extraction")
+
+# Parse grades data from manually extracted JSON
+func parse_grades_data_from_json(json_data: Dictionary) -> void:
+	print("🔍 Processing manually extracted grades data...")
+	
+	# Convert the manual JSON format to our internal format
+	var grades = []
+	var subjects = json_data.get("subjects", [])
+	
+	for subject_data in subjects:
+		# Try to parse the grade as a float
+		var grade_value = null
+		var grade_text = str(subject_data.get("grade", "")).strip_edges()
+		
+		# Handle different grade formats
+		if grade_text.is_valid_float():
+			grade_value = grade_text.to_float()
+		elif grade_text.contains("/"):
+			# Handle formats like "5.5/6.0"
+			var parts = grade_text.split("/")
+			if parts.size() >= 1 and parts[0].is_valid_float():
+				grade_value = parts[0].to_float()
+		elif grade_text == "-" or grade_text == "" or grade_text.to_lower() == "n/a":
+			grade_value = null  # No grade yet
+		else:
+			# Try to extract number from text
+			var number_regex = RegEx.new()
+			number_regex.compile("([0-9]+\\.?[0-9]*)")
+			var number_result = number_regex.search(grade_text)
+			if number_result:
+				grade_value = number_result.get_string(1).to_float()
+		
+		grades.append({
+			"subject": subject_data.get("name", subject_data.get("code", "Unknown")),
+			"subject_code": subject_data.get("code", ""),
+			"grade": grade_value,
+			"grade_text": grade_text,
+			"confirmed": subject_data.get("confirmed", "-"),
+			"weight": 1.0,
+			"date": "",
+			"theme": ""
+		})
+	
+	print("📊 Processed ", grades.size(), " grades from manual extraction")
+	
+	var result_data = {
+		"type": "grades",
+		"success": true,
+		"grades": grades,
+		"count": grades.size(),
+		"student_info": json_data.get("student", {}),
+		"timestamp": json_data.get("timestamp", ""),
+		"raw_data": json_data,
+		"source": "manual_extraction"
+	}
+	data_received.emit("grades", result_data)
+
 func _ready() -> void:
 	setup_http_client()
 	ensure_data_directory()
 	load_config()
+	# Try to load any existing extracted grades
+	load_existing_grades_for_testing()
 
 func ensure_data_directory() -> void:
 	# Create data directory if it doesn't exist
@@ -101,6 +176,125 @@ func auto_login_if_credentials_exist() -> void:
 	# No valid credentials found, trigger setup
 	print("📂 No saved credentials found - setup required")
 	setup_required.emit()
+
+# Execute JavaScript-based grade extraction on the browser side
+func get_javascript_extraction_code() -> String:
+	return """
+function downloadData(data, filename, type = 'application/json') {
+	const blob = new Blob([data], { type: type });
+	const url = URL.createObjectURL(blob);
+	const link = document.createElement('a');
+	link.href = url;
+	link.download = filename;
+	document.body.appendChild(link);
+	link.click();
+	document.body.removeChild(link);
+	URL.revokeObjectURL(url);
+}
+
+// Function to extract grades from current page
+function extractGradesFromPage() {
+	const gradesData = {
+		timestamp: new Date().toISOString(),
+		student: {
+			name: document.querySelector('h3')?.textContent?.trim() || 'Unknown',
+			class: 'M2a' // extracted from the HTML
+		},
+		subjects: []
+	};
+
+	// Extract table data
+	const rows = document.querySelectorAll('.mdl-data-table tr');
+	rows.forEach(row => {
+		const cells = row.querySelectorAll('td');
+		if (cells.length >= 4) {
+			const subjectCell = cells[0];
+			const gradeCell = cells[1];
+			const confirmedCell = cells[3];
+			
+			if (subjectCell && subjectCell.querySelector('b')) {
+				const subjectCode = subjectCell.querySelector('b')?.textContent?.trim();
+				const subjectName = subjectCell.textContent?.split('\\n')[1]?.trim();
+				const grade = gradeCell?.textContent?.trim();
+				const confirmed = confirmedCell?.textContent?.trim();
+				
+				if (subjectCode) {
+					gradesData.subjects.push({
+						code: subjectCode,
+						name: subjectName,
+						grade: grade,
+						confirmed: confirmed
+					});
+				}
+			}
+		}
+	});
+
+	// Extract chart data if available
+	if (typeof kursData_0 !== 'undefined') {
+		gradesData.chartData = kursData_0;
+	}
+
+	return gradesData;
+}
+
+// Method 1: Extract current page data and save
+console.log("Extracting grades from current page...");
+const currentGrades = extractGradesFromPage();
+downloadData(JSON.stringify(currentGrades, null, 2), `grades_${new Date().toISOString().split('T')[0]}.json`);
+console.log("Current grades data:", currentGrades);
+return currentGrades;
+"""
+
+# Print the JavaScript code for manual browser execution
+func print_javascript_extraction_guide():
+	print("🚀 JAVASCRIPT GRADE EXTRACTION GUIDE:")
+	print("1. Log into Schulnetz in your browser")
+	print("2. Navigate to the grades page")
+	print("3. Open browser developer console (F12)")
+	print("4. Copy and paste this JavaScript code:")
+	print("=" * 80)
+	print(get_javascript_extraction_code())
+	print("=" * 80)
+	print("5. The script will download a JSON file with your grades")
+	print("6. Place the JSON file in: user://data/latest_grades.json")
+	print("7. Restart the app to see your real grades!")
+
+# Trigger manual extraction guide (call this from UI)
+func show_manual_extraction_guide():
+	print_javascript_extraction_guide()
+	# Also save the code to a file for easy copy-paste
+	var js_file = FileAccess.open("user://data/extraction_script.js", FileAccess.WRITE)
+	if js_file:
+		js_file.store_string(get_javascript_extraction_code())
+		js_file.close()
+		print("💾 JavaScript code saved to: user://data/extraction_script.js")
+	
+	# Create a simple instruction file
+	var instructions = """SCHULNETZ GRADE EXTRACTION INSTRUCTIONS
+
+1. Log into your Schulnetz account in your web browser
+2. Navigate to the grades page (Noten/Bewertungen)
+3. Open the browser developer console:
+   - Press F12
+   - Or Right-click and select "Inspect" → "Console"
+4. Copy the contents of extraction_script.js
+5. Paste it into the console and press Enter
+6. A JSON file will download automatically
+7. Save this file as "latest_grades.json" in your app's data folder
+8. Restart the Schulnetz app to see your real grades!
+
+The app data folder is located at:
+%s
+
+Enjoy your real grades in the gamified interface! 🎮
+""" % OS.get_user_data_dir()
+	
+	var instruction_file = FileAccess.open("user://data/INSTRUCTIONS.txt", FileAccess.WRITE)
+	if instruction_file:
+		instruction_file.store_string(instructions)
+		instruction_file.close()
+		print("📋 Instructions saved to: user://data/INSTRUCTIONS.txt")
 
 func save_config() -> void:
 	var config = {
@@ -293,6 +487,102 @@ func fetch_grades() -> void:
 	current_request_type = "grades"
 	http_client.request(grades_url, headers, HTTPClient.METHOD_GET)
 
+# Extract grades using the new JavaScript-based extraction method
+func extract_grades_from_html(html_content: String) -> Dictionary:
+	var grades_data = {
+		"timestamp": Time.get_datetime_string_from_system(),
+		"student": {
+			"name": "Unknown",
+			"class": "Unknown"
+		},
+		"subjects": []
+	}
+	
+	# Extract student name from h3 tag
+	var name_regex = RegEx.new()
+	name_regex.compile("<h3[^>]*>([^<]+)</h3>")
+	var name_result = name_regex.search(html_content)
+	if name_result:
+		grades_data.student.name = name_result.get_string(1).strip_edges()
+	
+	# Extract class from any context (often in M2a format)
+	var class_regex = RegEx.new()
+	class_regex.compile("\\b(M\\d+[a-z])\\b")
+	var class_result = class_regex.search(html_content)
+	if class_result:
+		grades_data.student.class = class_result.get_string(1)
+	
+	# Extract table data using improved parsing
+	var table_regex = RegEx.new()
+	table_regex.compile("<tr[^>]*>([\\s\\S]*?)</tr>")
+	var table_results = table_regex.search_all(html_content)
+	
+	for row_match in table_results:
+		var row_html = row_match.get_string(1)
+		var cells = extract_table_cells(row_html)
+		
+		if cells.size() >= 4:
+			var subject_cell = cells[0]
+			var grade_cell = cells[1]
+			var confirmed_cell = cells[3] if cells.size() > 3 else ""
+			
+			# Extract subject code (usually in <b> tags)
+			var subject_code_regex = RegEx.new()
+			subject_code_regex.compile("<b[^>]*>([^<]+)</b>")
+			var subject_code_result = subject_code_regex.search(subject_cell)
+			
+			if subject_code_result:
+				var subject_code = subject_code_result.get_string(1).strip_edges()
+				
+				# Extract subject name (text after the bold part)
+				var subject_name = extract_text_after_bold(subject_cell)
+				
+				# Extract grade value
+				var grade_text = extract_cell_text(grade_cell).strip_edges()
+				
+				# Extract confirmed status
+				var confirmed_text = extract_cell_text(confirmed_cell).strip_edges()
+				
+				if subject_code != "":
+					grades_data.subjects.append({
+						"code": subject_code,
+						"name": subject_name,
+						"grade": grade_text,
+						"confirmed": confirmed_text
+					})
+	
+	print("📊 Extracted ", grades_data.subjects.size(), " subjects from grades page")
+	return grades_data
+
+# Helper function to extract text content from table cells
+func extract_table_cells(row_html: String) -> Array:
+	var cells = []
+	var cell_regex = RegEx.new()
+	cell_regex.compile("<td[^>]*>([\\s\\S]*?)</td>")
+	var cell_results = cell_regex.search_all(row_html)
+	
+	for cell_match in cell_results:
+		cells.append(cell_match.get_string(1))
+	
+	return cells
+
+# Helper function to extract plain text from HTML
+func extract_cell_text(html: String) -> String:
+	var tag_regex = RegEx.new()
+	tag_regex.compile("<[^>]*>")
+	var text = tag_regex.sub(html, "", true)
+	return text.strip_edges()
+
+# Helper function to extract subject name after bold tag
+func extract_text_after_bold(html: String) -> String:
+	var lines = html.split("\n")
+	for i in range(lines.size()):
+		if i > 0:  # Skip first line which contains the bold tag
+			var text = extract_cell_text(lines[i]).strip_edges()
+			if text != "":
+				return text
+	return "Unknown Subject"
+
 func fetch_calendar() -> void:
 	if not session_active:
 		login_failed.emit("No active session")
@@ -337,57 +627,64 @@ func fetch_calendar() -> void:
 	http_client.request(scheduler_url, headers, HTTPClient.METHOD_GET)
 
 func parse_grades_data(html_content: String) -> void:
+	print("🔍 Parsing grades data using new extraction method...")
+	
+	# Use the new extraction method
+	var extracted_data = extract_grades_from_html(html_content)
+	
+	# Convert to the expected format for the grades scene
 	var grades = []
-	var regex = RegEx.new()
-	regex.compile("<tr[^>]*>.*?</tr>")
-	var row_results = regex.search_all(html_content)
-	for row_result in row_results:
-		var row_html = row_result.get_string()
-		var cell_regex = RegEx.new()
-		cell_regex.compile("<td[^>]*>(.*?)</td>")
-		var cell_results = cell_regex.search_all(row_html)
-		if cell_results.size() >= 2:
-			var cells = []
-			for cell_result in cell_results:
-				var cell_text = cell_result.get_string(1)
-				var clean_regex = RegEx.new()
-				clean_regex.compile("<[^>]+>")
-				cell_text = clean_regex.sub(cell_text, "", true)
-				cells.append(cell_text.strip_edges())
-			var grade_value = null
-			var subject = ""
-			var date = ""
-			var theme = ""
-			for i in range(cells.size()):
-				var cell = cells[i]
-				if cell.is_valid_float():
-					var grade_float = cell.to_float()
-					if grade_float >= 1.0 and grade_float <= 6.0:
-						grade_value = grade_float
-						if i > 0:
-							subject = cells[i-1]
-						if i + 1 < cells.size():
-							theme = cells[i+1]
-						break
-				# Use regex for dates, not .match
-				var date_regex = RegEx.new()
-				date_regex.compile("\\d{2}\\.\\d{2}\\.\\d{4}")
-				if date_regex.search(cell) and cell.length() <= 10:
-					date = cell
-			if grade_value != null and subject != "":
-				grades.append({
-					"subject": subject,
-					"grade": grade_value,
-					"date": date,
-					"theme": theme,
-					"weight": 1.0
-				})
-	print("Parsed ", grades.size(), " grades")
+	for subject_data in extracted_data.subjects:
+		# Try to parse the grade as a float
+		var grade_value = null
+		var grade_text = subject_data.grade.strip_edges()
+		
+		# Handle different grade formats
+		if grade_text.is_valid_float():
+			grade_value = grade_text.to_float()
+		elif grade_text.contains("/"):
+			# Handle formats like "5.5/6.0"
+			var parts = grade_text.split("/")
+			if parts.size() >= 1 and parts[0].is_valid_float():
+				grade_value = parts[0].to_float()
+		elif grade_text == "-" or grade_text == "" or grade_text.to_lower() == "n/a":
+			grade_value = null  # No grade yet
+		else:
+			# Try to extract number from text
+			var number_regex = RegEx.new()
+			number_regex.compile("([0-9]+\\.?[0-9]*)")
+			var number_result = number_regex.search(grade_text)
+			if number_result:
+				grade_value = number_result.get_string(1).to_float()
+		
+		grades.append({
+			"subject": subject_data.name if subject_data.name != "Unknown Subject" else subject_data.code,
+			"subject_code": subject_data.code,
+			"grade": grade_value,
+			"grade_text": grade_text,
+			"confirmed": subject_data.confirmed,
+			"weight": 1.0,
+			"date": "",
+			"theme": ""
+		})
+	
+	print("📊 Parsed ", grades.size(), " grades from new extraction method")
+	
+	# Save the raw extracted data to file for debugging and future use
+	var data_file = FileAccess.open("user://data/latest_grades.json", FileAccess.WRITE)
+	if data_file:
+		data_file.store_string(JSON.stringify(extracted_data, "\t"))
+		data_file.close()
+		print("💾 Saved raw grades data to user://data/latest_grades.json")
+	
 	var result_data = {
 		"type": "grades",
 		"success": true,
 		"grades": grades,
-		"count": grades.size()
+		"count": grades.size(),
+		"student_info": extracted_data.student,
+		"timestamp": extracted_data.timestamp,
+		"raw_data": extracted_data
 	}
 	data_received.emit("grades", result_data)
 

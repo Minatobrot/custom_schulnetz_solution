@@ -15,6 +15,7 @@ func _ready():
 	$MainContainer/NavigationPanel/NavigationContainer/AchievementsButton.pressed.connect(_on_achievements_button_pressed)
 	$MainContainer/NavigationPanel/NavigationContainer/CharacterButton.pressed.connect(_on_character_button_pressed)
 	$MainContainer/NavigationPanel/NavigationContainer/SettingsButton.pressed.connect(_on_settings_button_pressed)
+	$MainContainer/NavigationPanel/NavigationContainer/ManualExtractionButton.pressed.connect(_on_manual_extraction_button_pressed)
 	
 	# Create login status label
 	create_login_status_label()
@@ -99,6 +100,13 @@ func _on_character_button_pressed():
 func _on_settings_button_pressed():
 	print(\"Switching to Settings Scene\")
 	get_tree().change_scene_to_file(\"res://scenes/ui/settings_scene.tscn\")
+
+func _on_manual_extraction_button_pressed():
+	print(\"🚀 Manual Grade Extraction Guide Triggered\")
+	if SchulnetzManager:
+		SchulnetzManager.show_manual_extraction_guide()
+	else:
+		print(\"❌ SchulnetzManager not available\")
 
 func _on_setup_required():
 	print(\"Setup required - showing setup dialog\")
@@ -310,6 +318,13 @@ theme_override_styles/hover = SubResource("StyleBoxFlat_4")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_3")
 theme_override_styles/normal = SubResource("StyleBoxFlat_2")
 text = "⚙️ SETTINGS"
+
+[node name="ManualExtractionButton" type="Button" parent="MainContainer/NavigationPanel/NavigationContainer"]
+layout_mode = 2
+theme_override_styles/hover = SubResource("StyleBoxFlat_4")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_3")
+theme_override_styles/normal = SubResource("StyleBoxFlat_2")
+text = "📋 EXTRACT GRADES"
 
 [node name="Separator2" type="HSeparator" parent="MainContainer/NavigationPanel/NavigationContainer"]
 layout_mode = 2
