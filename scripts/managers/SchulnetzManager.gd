@@ -20,6 +20,7 @@ var password: String = ""
 var school_identifier: String = ""  # e.g., "ausserschwyz"
 var page_ids: Dictionary = {}  # Discovered page IDs
 var config_file_path: String = "user://schulnetz_config.json"
+@export var language: String = "de"  # Default UI language parameter (e.g., "de" or "en")
 
 # Schulnetz URLs (will be dynamically built based on school)
 var base_url: String = ""
@@ -56,11 +57,14 @@ func load_config():
 					print("Loaded school configuration: ", school_identifier)
 				else:
 					setup_required.emit()
+					print("School identifier missing in config file")
 			else:
-				print("Failed to parse config file")
+				print("Failed to parse config file: ", json_text)
 				setup_required.emit()
+		else:
+			print("Failed to open config file")
 	else:
-		print("No configuration found - setup required")
+		print("No configuration found. Setup required.")
 		setup_required.emit()
 
 func save_config():
@@ -79,7 +83,8 @@ func save_config():
 func setup_school_configuration(schulnetz_url: String) -> bool:
 	# Extract and save school identifier from Schulnetz URL
 	var regex = RegEx.new()
-	regex.compile("schul-netz\\.com/([^/]+)/")
+	# Match school identifier between domain and optional slash or end
+	regex.compile("schul-netz\\.com/([^/]+)(?:/|$)")
 	var result = regex.search(schulnetz_url)
 	
 	if result:
@@ -92,20 +97,20 @@ func setup_school_configuration(schulnetz_url: String) -> bool:
 		print("Could not extract school identifier from URL: ", schulnetz_url)
 		return false
 
-func login_to_schulnetz(user: String, pass: String):
+func login_to_schulnetz(user: String, password: String):
 	# Login to Schulnetz directly via HTTP
 	if school_identifier == "":
-		login_failed.emit("School not configured. Please set up your Schulnetz URL first.")
+		setup_required.emit()
 		return
 	
 	username = user
-	password = pass
+	password = password
 	
 	# Clear previous session
 	clear_session_data()
 	
 	# Step 1: Get login page to establish session
-	var login_url = base_url + "loginto.php?pageid=1&mode=0&lang="
+	var login_url = base_url + "loginto.php?pageid=1&mode=0&lang=" + language
 	print("Logging in to: ", login_url)
 	
 	var headers = [
@@ -118,17 +123,64 @@ func login_to_schulnetz(user: String, pass: String):
 	http_client.request(login_url, headers, HTTPClient.METHOD_GET)
 
 func clear_session_data():
-	# Clear session cookies and page IDs for new login
+	# Clear only session data for new login; config persists
 	session_cookies.clear()
 	page_ids.clear()
 	session_active = false
 	print("Cleared session data")
 
+func extract_cookies_from_headers(headers: PackedStringArray):
+	# Extract session cookies from HTTP headers and keep in memory
+	for header in headers:
+		if header.to_lower().begins_with("set-cookie:"):
+			var cookie_data = header.substr(header.find(":") + 1).strip_edges()
+			var parts = cookie_data.split(";")[0].split("=")
+			if parts.size() >= 2:
+				session_cookies[parts[0]] = parts[1]
+				print("Stored cookie: ", parts[0])
+
+func build_cookie_header() -> String:
+	# Build cookie header for requests from session_cookies dict
+	var cookie_parts = []
+	for name in session_cookies.keys():
+		cookie_parts.append(name + "=" + session_cookies[name])
+	return "Cookie: " + "; ".join(cookie_parts)
+
+func submit_login_credentials(login_page_html: String):
+	# Submit login credentials via POST
+	var form_data = "login=" + username.uri_encode() + "&passwort=" + password.uri_encode()
+
+	var headers = [
+		"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+		"Content-Type: application/x-www-form-urlencoded",
+		"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+		"Referer: " + base_url + "loginto.php?pageid=1&mode=0&lang=" + language
+	]
+
+	# Add cookies if we have any from initial GET
+	if session_cookies.size() > 0:
+		headers.append(build_cookie_header())
+	
+	# Parse hidden fields (e.g., loginhash)
+	var hidden_field_regex = RegEx.new()
+	hidden_field_regex.compile("<input[^>]*type=\"hidden\"[^>]*name=\"([^\"]+)\"[^>]*value=\"([^\"]+)\"[^>]*>")
+	var hidden_fields = hidden_field_regex.search_all(login_page_html)
+	for field in hidden_fields:
+		var name = field.get_string(1)
+		var value = field.get_string(2)
+		form_data += "&" + name + "=" + value.uri_encode()
+		print("Found hidden field: ", name, " = ", value)
+	
+	var login_submit_url = base_url + "loginto.php?pageid=1&mode=0&lang=" + language
+	print("Submitting login credentials...")
+	current_request_type = "login_submit"
+	http_client.request(login_submit_url, headers, HTTPClient.METHOD_POST, form_data)
+
 func _on_http_response(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray):
 	# Handle HTTP responses
 	var response_text = body.get_string_from_utf8()
-	
 	print("HTTP Response: ", response_code, " - Length: ", response_text.length(), " - Type: ", current_request_type)
+	print("Raw Response Body: ", response_text)
 	
 	if response_code == 200:
 		# Extract cookies from headers
@@ -168,44 +220,6 @@ func _on_http_response(result: int, response_code: int, headers: PackedStringArr
 		else:
 			login_failed.emit("Connection error: " + str(response_code))
 
-func extract_cookies_from_headers(headers: PackedStringArray):
-	# Extract session cookies from HTTP headers
-	for header in headers:
-		if header.begins_with("Set-Cookie:") or header.begins_with("set-cookie:"):
-			var cookie_data = header.substr(11).strip_edges()
-			var parts = cookie_data.split(";")[0].split("=")
-			if parts.size() >= 2:
-				session_cookies[parts[0]] = parts[1]
-				print("Stored cookie: ", parts[0])
-
-func build_cookie_header() -> String:
-	# Build cookie header for requests
-	var cookie_parts = []
-	for name in session_cookies:
-		cookie_parts.append(name + "=" + session_cookies[name])
-	return "Cookie: " + "; ".join(cookie_parts)
-
-func submit_login_credentials(login_page_html: String):
-	# Submit login credentials via POST
-	var form_data = "username=" + username.uri_encode() + "&password=" + password.uri_encode()
-	
-	var headers = [
-		"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-		"Content-Type: application/x-www-form-urlencoded",
-		"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-		"Referer: " + base_url + "loginto.php?pageid=1&mode=0&lang="
-	]
-	
-	# Add cookies if we have any
-	if session_cookies.size() > 0:
-		headers.append(build_cookie_header())
-	
-	var login_submit_url = base_url + "loginto.php?pageid=1&mode=0&lang="
-	print("Submitting login credentials...")
-	
-	current_request_type = "login_submit"
-	http_client.request(login_submit_url, headers, HTTPClient.METHOD_POST, form_data)
-
 func discover_page_ids(html_content: String):
 	# Discover page IDs from HTML content
 	var regex = RegEx.new()
@@ -243,17 +257,11 @@ func fetch_grades():
 	if not session_active:
 		login_failed.emit("No active session")
 		return
-	
-	var grades_page_id = page_ids.get("grades", "21311")  # Default grades page ID
-	var grades_url = base_url + "index.php?pageid=" + grades_page_id
-	
-	var headers = [
-		"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-		"Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-	]
-	
+	var headers = ["User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"]
 	if session_cookies.size() > 0:
 		headers.append(build_cookie_header())
+	var grades_page_id = page_ids.get("grades", "21311")  # Default grades page ID
+	var grades_url = base_url + "index.php?pageid=" + grades_page_id
 	
 	print("Fetching grades from: ", grades_url)
 	current_request_type = "grades"
